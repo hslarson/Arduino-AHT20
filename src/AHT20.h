@@ -77,8 +77,8 @@ class AHT20 {
   bool softReset();  // Restart the sensor system without turning power off and on
 
   // Getter functions
-  float getTemperature(bool force_new = true);  // Goes through the measurement sequence and returns temperature in degrees celsius
-  float getHumidity(bool force_new = true);  // Goes through the measurement sequence and returns humidity in % RH
+  float getTemperature(bool force_new = false);  // Goes through the measurement sequence and returns temperature in degrees celsius
+  float getHumidity(bool force_new = false);  // Goes through the measurement sequence and returns humidity in % RH
 };
 
 #endif
