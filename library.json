@@ -1,0 +1,12 @@
+{
+    "name": "AHT20",
+    "keywords": "I2C, sensor, AHT, AHT20",
+    "description": "Arduino library for the Asair AHT20 temperature and humidity sensor module",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/hslarson/Arduino-AHT20.git"
+    },
+    "version": "1.0.0", 
+    "frameworks": "arduino",
+    "platforms": ["atmelavr", "espressif8266", "espressif32"]
+  }
