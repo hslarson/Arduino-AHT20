@@ -1,4 +1,4 @@
-#include <SparkFun_Qwiic_Humidity_AHT20.h>
+#include "AHT20.h"
 
 // Constructor
 AHT20::AHT20(const uint8_t deviceAddress) { _deviceAddress = deviceAddress; }
