@@ -1,53 +1,31 @@
-/**************************************************************************
-   Tests the getTemperature and getHumidity functions of the Qwiic Humidity
-   library
-
-   Priyanka Makin @ SparkFun Electronics
-   Original Creation Date: March 31, 2020
-
-   SparkFun labored with love to create this code. Feel like supporting open
-   source hardware? Buy a board from SparkFun! https://www.sparkfun.com/products/16618
-
-   This code is lemonadeware; if you see me (or any other SparkFun employee)
-   at the local, and you've found our code helpful, please buy us a round!
-
-   Hardware Connections:
-   Attach a RedBoard to computer using micro-B USB cable.
-   Attach a Qwiic Humidity board to RedBoard using Qwiic cable.
-
-   Distributed as-is; no warranty is given.
- **************************************************************************/
 #include <Wire.h>
+#include "AHT20.h"
 
-#include <SparkFun_Qwiic_Humidity_AHT20.h> //Click here to get the library: http://librarymanager/All#Qwiic_Humidity_AHT20 by SparkFun
 AHT20 humiditySensor;
 
-void setup()
-{
+void setup() {
+  // Init serial
   Serial.begin(115200);
-  Serial.println("Qwiic Humidity AHT20 examples");
 
-  Wire.begin(); //Join I2C bus
+  // Init I2C bus
+  Wire.begin();
 
-  //Check if the AHT20 will acknowledge
-  if (humiditySensor.begin() == false)
-  {
+  // Init module
+  if (!humiditySensor.begin(&Wire, 2000)) {
     Serial.println("AHT20 not detected. Please check wiring. Freezing.");
     while (1);
   }
   Serial.println("AHT20 acknowledged.");
 }
 
-void loop()
-{
-  //If a new measurement is available
-  if (humiditySensor.available() == true)
-  {
-    //Get the new temperature and humidity value
+void loop() {
+  // Check f a new measurement is available
+  if (humiditySensor.available() == true) {
+    // Get the new temperature and humidity value
     float temperature = humiditySensor.getTemperature();
     float humidity = humiditySensor.getHumidity();
 
-    //Print the results
+    // Print the results
     Serial.print("Temperature: ");
     Serial.print(temperature, 2);
     Serial.print(" C\t");
@@ -58,7 +36,5 @@ void loop()
     Serial.println();
   }
 
-  //The AHT20 can respond with a reading every ~50ms. However, increased read time can cause the IC to heat around 1.0C above ambient.
-  //The datasheet recommends reading every 2 seconds.
-  delay(2000);
+  delay(10);
 }
