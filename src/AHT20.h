@@ -45,19 +45,12 @@ class AHT20 {
   crc8 crc;
 
   // Measurement variables
+  uint32_t _raw_temperature;
+  uint32_t _raw_humidity;
+
   uint32_t _read_delay;
   uint32_t _last_read;
   bool _measurementStarted = false;
-
-  struct {
-    uint32_t humidity;
-    uint32_t temperature;
-  } sensorData;
-
-  struct {
-    uint8_t temperature : 1;
-    uint8_t humidity : 1;
-  } sensorQueried;
 
  public:
   explicit AHT20(const uint8_t deviceAddress = AHT20_DEFAULT_ADDRESS);  // Sets the address of the device
@@ -73,12 +66,12 @@ class AHT20 {
   // Measurement helper functions
   bool initialize();          // Initialize for taking measurement
   bool triggerMeasurement();  // Trigger the AHT20 to take a measurement
-  bool readData();  // Read and parse the 6 bytes of data into raw humidity and temp
+  bool readData();   // Read and parse the 6 bytes of data into raw humidity and temp
   bool softReset();  // Restart the sensor system without turning power off and on
 
   // Getter functions
-  float getTemperature(bool force_new = false);  // Goes through the measurement sequence and returns temperature in degrees celsius
-  float getHumidity(bool force_new = false);  // Goes through the measurement sequence and returns humidity in % RH
+  float getTemperature(bool force_new = true); // Goes through the measurement sequence and returns temperature in degrees celsius
+  float getHumidity(bool force_new = true);    // Goes through the measurement sequence and returns humidity in % RH
 };
 
 #endif

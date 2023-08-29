@@ -1,5 +1,12 @@
 # AHT20 Arduino Library
 
+## Improvements
+- Implemented cyclic redundancy check (CRC)
+- getTemperature() and getHumidity() can be called in a non-blocking manner
+- Fixed bug where isConnected() prevents new measurements
+- Improved readData() to be more fault tolerant
+- Added an integrated reading cooldown
+
 ## Repository Contents
 * **/examples** - Example code to show how the functions work.
 * **/src** - Source files for the library (.cpp, .h).

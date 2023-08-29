@@ -4,58 +4,51 @@
 AHT20::AHT20(const uint8_t deviceAddress) { _deviceAddress = deviceAddress; }
 
 // Initialize and calibrate the module
-// Read delay enforces a minumum delay between measurements (2 seconds recommended)
+// Read delay enforces a minumum delay between measurements
+// (2 seconds recommended)
 bool AHT20::begin(TwoWire* wire, uint32_t read_delay_ms) {
   _Wire = wire;
 
+  // Verify connection
   if (!isConnected()) return false;
 
-  // Wait 40 ms after power-on before reading temp or humidity.
+  // Reset the device
+  softReset();
   delay(40);
 
-  // Check if the calibrated bit is set. If not, init the sensor.
-  if (!isCalibrated()) {
-    // Initialize module
-    initialize();
+  // Initialize module
+  initialize();
 
-    // Start a measurement
-    _read_delay = 0;  // Force reading
-    readData();
-
-    // Verify calibration
-    if (!isCalibrated()) {
-      return false;
-    }
-  }
+  // Start a measurement
+  _read_delay = 0;
+  readData();
 
   // Set read delay
   _read_delay = read_delay_ms;
 
-  // Mark all datums as old (need to be refreshed)
-  sensorQueried.temperature = true;
-  sensorQueried.humidity = true;
-
-  return true;
+  // Verify calibration
+  return isCalibrated();
 }
 
 // Verify I2C communication
+// Function will make up to 2 connection attempts in case
+// the device is still powering up
 bool AHT20::isConnected() {
-  // Just performing a null transmission messes up the sensor
+  // Performing a null transaction messes up the sensor
   // Instead, read the status
-  uint8_t status = getStatus();
-  if (status) {
-    return true;
+  bool count = 0;
+  while (!getStatus()) {
+    if (count++) return false;
+    delay(100);
   }
 
-  // If IC failed to respond, give it 20ms more for Power On Startup
-  delay(100);
-  return getStatus() != 0;
+  return true;
 }
 
 // Returns the status byte
 uint8_t AHT20::getStatus() {
   _Wire->requestFrom(_deviceAddress, (uint8_t)1);
-  if (_Wire->available()==1) return (_Wire->read());
+  if (_Wire->available() == 1) return _Wire->read();
   return 0;
 }
 
@@ -82,53 +75,47 @@ bool AHT20::softReset() {
 }
 
 // Send command to start measurement
+// Return true if a new measurement was started
 bool AHT20::triggerMeasurement() {
-  // Check for ongoing measurement
-  if (_measurementStarted) return true;
-
-  // Enforce read delay
-  if (millis() - _last_read < _read_delay) {
+  // Check for ongoing measurement and enforce cooldown
+  if (_measurementStarted || (millis() - _last_read < _read_delay))
     return false;
-  }
 
   _Wire->beginTransmission(_deviceAddress);
   _Wire->write(CMD_MEASURE_2);
   _Wire->write(CMD_MEASURE_1);
   _Wire->write(CMD_MEASURE_0);
-  if (_Wire->endTransmission() == 0) {
-    _measurementStarted = true;
-    return true;
-  }
 
-  return false;
+  _measurementStarted = _Wire->endTransmission() == 0;
+  return _measurementStarted;
 }
 
 // Reads new data from sensor
-// Ignores sensorQueried flags
+// This function can be slow, make sure available() is true
+// before calling to avoid excessive waiting
 bool AHT20::readData() {
   // Start measurement
-  // Return false if reading cooldown condition isn't met
-  if (!_measurementStarted) {
-    if (triggerMeasurement()) {
-      delay(75);
-    } else
-      return false;
+  if (triggerMeasurement()) {
+    delay(75);
+  } else if (!_measurementStarted) {
+    return false;
   }
 
+  // Wait for reading to complete
   // Time out after 100ms
-  int counter = 0;
-  while (isBusy() && counter++ < 100) {
+  uint32_t start = millis();
+  while (isBusy()) {
+    if (millis() - start >= 100) {
+      return false;
+    }
     delay(1);
-  }
-  if (counter >= 100) {
-    return false;
   }
 
   // Reset timer/flags
   _last_read = millis();
   _measurementStarted = false;
 
-  // Read new data
+  // Fetch new data
   if (_Wire->requestFrom(_deviceAddress, (uint8_t)7) != 7) {
     return false;
   }
@@ -165,84 +152,46 @@ bool AHT20::readData() {
   }
 
   // Save data only if it's valid
-  sensorData.temperature = temperature;
-  sensorData.humidity = humidity;
+  _raw_temperature = temperature;
+  _raw_humidity = humidity;
 
-  // Mark data as fresh
-  sensorQueried.temperature = false;
-  sensorQueried.humidity = false;
   return true;
 }
 
-// Return true if both datums are fresh
-// Return false otherwise
-// If either datum is old, start a new reading
+// Return true if both datums are ready to be read
 bool AHT20::available() {
-  // Both datums are fresh
-  if (!sensorQueried.humidity && !sensorQueried.temperature) {
-    return true;
-  }
-
-  // Trigger a measurement if one has not been previously started, 
+  // Trigger a measurement if one has not been started,
   // then return false
   if (!_measurementStarted) {
-    if (triggerMeasurement()) delay(75);
+    triggerMeasurement();
     return false;
   }
 
   // If measurement has been started, check to see if it's complete.
-  // If not complete, return false
-  if (isBusy()) {
-    return false;
-  }
-
-  // If complete, read data
-  // Automatically restart measurement if read fails
-  if (!readData()) {
-    if (triggerMeasurement()) delay(75);
-    return false;
-  }
-  return true;
+  return !isBusy();
 }
 
 // Get temperature value in celsius
 float AHT20::getTemperature(bool force_new) {
-  // If data is old, start new measurement
-  // If new data isn't readily available, use old data (unless force_new is true)
-  while (sensorQueried.temperature) {
-    readData();
-    if (!force_new) {
-      break;
-    }
+  // If new data isn't readily available, use old data
+  // (unless force_new is true)
+  while (force_new || available()) {
+    if (readData()) break;
     delay(1);
   }
 
   // Convert raw value to celsius
-  float tempCelsius = ((float)sensorData.temperature / 1048576) * 200 - 50;
-
-  // Mark data as old
-  sensorQueried.temperature = true;
-
-  return tempCelsius;
+  return ((float)_raw_temperature / 1048576) * 200 - 50;
 }
 
 // Get humidity value as a percent [0-100]
 float AHT20::getHumidity(bool force_new) {
-  // If data is old, get new data
-  // If new data isn't readily available, use old data (unless force_new is true)
-  while (sensorQueried.humidity) {
-    readData();
-    if (!force_new) {
-      break;
-    }
+  // If new data isn't readily available, use old data
+  // (unless force_new is true)
+  while (force_new || available()) {
+    if (readData()) break;
     delay(1);
   }
 
-  // Convert raw value to percent
-  float relHumidity = ((float)sensorData.humidity / 1048576) * 100;
-
-  // Mark data as old
-  sensorQueried.humidity = true;
-
-  return relHumidity;
+  return ((float)_raw_humidity / 1048576) * 100;
 }
