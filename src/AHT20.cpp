@@ -18,31 +18,39 @@ bool AHT20::begin(TwoWire* wire, uint32_t read_delay_ms) {
 
   // Initialize module
   initialize();
+  delay(10);
 
   // Start a measurement
   _read_delay = 0;
-  readData();
-
-  // Set read delay
-  _read_delay = read_delay_ms;
+  readData();  // First measurement is garbage
 
   // Verify calibration
-  return isCalibrated();
+  if (!isCalibrated()) {
+    return false;
+  }
+
+  // Block for first valid data, but don't read it
+  uint32_t start = millis();
+  while (!available()) {
+    if (millis() - start < 100) {
+      return false;
+    }
+  }
+
+  // Set reading cooldown
+  _read_delay = read_delay_ms;
+  return true;
 }
 
 // Verify I2C communication
-// Function will make up to 2 connection attempts in case
-// the device is still powering up
-bool AHT20::isConnected() {
-  // Performing a null transaction messes up the sensor
-  // Instead, read the status
-  bool count = 0;
-  while (!getStatus()) {
-    if (count++) return false;
-    delay(100);
+// Function has a timeout of 100ms to allow for device bootup
+bool AHT20::isConnected(uint32_t timeout) {
+  uint32_t start = millis();
+  while (millis() - start < timeout) {
+    if (getStatus() != 0) return true;
+    delay(5);
   }
-
-  return true;
+  return false;
 }
 
 // Returns the status byte
@@ -61,43 +69,45 @@ bool AHT20::isBusy() { return (getStatus() & (1 << 7)); }
 // Send command to initialize the sensor
 bool AHT20::initialize() {
   _Wire->beginTransmission(_deviceAddress);
-  _Wire->write(CMD_INITIALIZE_2);
-  _Wire->write(CMD_INITIALIZE_1);
-  _Wire->write(CMD_INITIALIZE_0);
+  _Wire->write(AHT20_CMD_INITIALIZE_2);
+  _Wire->write(AHT20_CMD_INITIALIZE_1);
+  _Wire->write(AHT20_CMD_INITIALIZE_0);
   return _Wire->endTransmission() == 0;
 }
 
 // Reset the device
 bool AHT20::softReset() {
   _Wire->beginTransmission(_deviceAddress);
-  _Wire->write(CMD_RESET);
+  _Wire->write(AHT20_CMD_RESET);
   return _Wire->endTransmission() == 0;
 }
 
 // Send command to start measurement
-// Return true if a new measurement was started
+// Return false only if there was an error
 bool AHT20::triggerMeasurement() {
   // Check for ongoing measurement and enforce cooldown
-  if (_measurementStarted || (millis() - _last_read < _read_delay))
-    return false;
+  if (_measurementStarted || (millis() - _last_read < _read_delay)) return true;
 
   _Wire->beginTransmission(_deviceAddress);
-  _Wire->write(CMD_MEASURE_2);
-  _Wire->write(CMD_MEASURE_1);
-  _Wire->write(CMD_MEASURE_0);
+  _Wire->write(AHT20_CMD_MEASURE_2);
+  _Wire->write(AHT20_CMD_MEASURE_1);
+  _Wire->write(AHT20_CMD_MEASURE_0);
 
   _measurementStarted = _Wire->endTransmission() == 0;
   return _measurementStarted;
 }
 
-// Reads new data from sensor
+// Reads new data from sensor. Return true iff data was read sucessfully
 // This function can be slow, make sure available() is true
 // before calling to avoid excessive waiting
 bool AHT20::readData() {
+  // Wait for measurement cooldown
+  while (!_measurementStarted && (millis() - _last_read < _read_delay)) {
+    delay(1);
+  }
+
   // Start measurement
-  if (triggerMeasurement()) {
-    delay(75);
-  } else if (!_measurementStarted) {
+  if (!triggerMeasurement()) {
     return false;
   }
 
@@ -171,27 +181,31 @@ bool AHT20::available() {
   return !isBusy();
 }
 
-// Get temperature value in celsius
-float AHT20::getTemperature(bool force_new) {
+// Get temperature value in celsius [-40,85] and humidity value as a percent
+// [0-100] Returns false if there was an error during the reading process
+bool AHT20::getReading(float* temperature, float* humidity, bool force_new) {
   // If new data isn't readily available, use old data
   // (unless force_new is true)
-  while (force_new || available()) {
-    if (readData()) break;
-    delay(1);
+  if (force_new || available()) {
+    !readData();
   }
 
-  // Convert raw value to celsius
-  return ((float)_raw_temperature / 1048576) * 200 - 50;
+  // Save readings
+  temperature = ((float)_raw_temperature / 1048576) * 200 - 50;
+  humidity = ((float)_raw_humidity / 1048576) * 100;
+  return (temperature >= -40.0 && temperature <= 85.0) && (humidity >= 0.0 && humidity <= 100.0);
 }
 
-// Get humidity value as a percent [0-100]
-float AHT20::getHumidity(bool force_new) {
-  // If new data isn't readily available, use old data
-  // (unless force_new is true)
-  while (force_new || available()) {
-    if (readData()) break;
-    delay(1);
-  }
+// Get temperature value in celsius, added for backwards compatability
+float AHT20::getTemperature(bool force_new) {
+  float temp, humid;
+  getReading(&temp, &humid, force_new);
+  return humid;
+}
 
-  return ((float)_raw_humidity / 1048576) * 100;
+// Get humidity value as a percent, added for backwards compatability
+float AHT20::getHumidity(bool force_new) {
+  float temp, humid;
+  getReading(&temp, &humid, force_new);
+  return temp;
 }
