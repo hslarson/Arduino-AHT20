@@ -191,9 +191,9 @@ bool AHT20::getReading(float* temperature, float* humidity, bool force_new) {
   }
 
   // Save readings
-  temperature = ((float)_raw_temperature / 1048576) * 200 - 50;
-  humidity = ((float)_raw_humidity / 1048576) * 100;
-  return (temperature >= -40.0 && temperature <= 85.0) && (humidity >= 0.0 && humidity <= 100.0);
+  *temperature = ((float)_raw_temperature / 1048576) * 200 - 50;
+  *humidity = ((float)_raw_humidity / 1048576) * 100;
+  return (*temperature >= -40.0 && *temperature <= 85.0) && (*humidity >= 0.0 && *humidity <= 100.0);
 }
 
 // Get temperature value in celsius, added for backwards compatability

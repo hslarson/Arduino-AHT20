@@ -1,7 +1,8 @@
 #include <Wire.h>
 #include "AHT20.h"
 
-AHT20 humiditySensor;
+AHT20 aht20;
+float temperature, humidity;
 
 void setup() {
   // Init serial
@@ -11,7 +12,7 @@ void setup() {
   Wire.begin();
 
   // Init module
-  if (!humiditySensor.begin(&Wire, 2000)) {
+  if (!aht20.begin(&Wire, 2000)) {
     Serial.println("AHT20 not detected. Please check wiring. Freezing.");
     while (1);
   }
@@ -19,21 +20,22 @@ void setup() {
 }
 
 void loop() {
-  // Check f a new measurement is available
-  if (humiditySensor.available() == true) {
+  // Check if a new measurement is available
+  if (aht20.available()) {
     // Get the new temperature and humidity value
-    float temperature = humiditySensor.getTemperature();
-    float humidity = humiditySensor.getHumidity();
+    if (aht20.getReading(&temperature, &humidity)) {
+      // Print the results
+      Serial.print("Temperature: ");
+      Serial.print(temperature, 2);
+      Serial.print(" C\t");
+      Serial.print("Humidity: ");
+      Serial.print(humidity, 2);
+      Serial.print("% RH");
 
-    // Print the results
-    Serial.print("Temperature: ");
-    Serial.print(temperature, 2);
-    Serial.print(" C\t");
-    Serial.print("Humidity: ");
-    Serial.print(humidity, 2);
-    Serial.print("% RH");
-
-    Serial.println();
+      Serial.println();
+    } else {
+      Serial.println("Read Error");
+    }
   }
 
   delay(10);
